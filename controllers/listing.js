@@ -1,4 +1,4 @@
-const geocoding = require("@mapbox/mapbox-sdk/services/geocoding");
+
 const Listing = require("../models/listing.js");
 const mbxGeocoding = require('@mapbox/mapbox-sdk/services/geocoding');
 const mapToken = process.env.MAP_TOKEN;
@@ -80,8 +80,26 @@ module.exports.renderEditForm = async (req, res, next) => {
 }
 
 module.exports.edit = async (req, res, next) => {
+    let geometry = null;
+    
+    if (geocodingClient) {
+        try {
+            let response = await geocodingClient
+                .forwardGeocode({
+                    query: req.body.listing.location,
+                    limit: 1
+                })
+                .send();
+            geometry = response.body.features[0].geometry;
+        } catch (error) {
+            console.log("Geocoding error:", error.message);
+        }
+    }
     let { id } = req.params;
     let listing = await Listing.findByIdAndUpdate(id, { ...req.body.listing });
+    if (geometry) {
+        listing.geometry = geometry;
+    }
     if (typeof req.file !== "undefined") {
         let url = req.file.path;
         let filename = req.file.filename;
@@ -89,6 +107,8 @@ module.exports.edit = async (req, res, next) => {
         listing.image = { url, filename };
         await listing.save();
     }
+    
+    
     req.flash("success", "Listing updated");
     res.redirect(`/listings/${id}`);
 }
